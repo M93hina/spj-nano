@@ -1,0 +1,24 @@
+{
+  "computed_at": "2026-07-08T10:39:30",
+  "data_until": "2026-07-01 12:05:00",
+  "n_samples": 8786,
+  "spike_points_removed": 7,
+  "thresholds_ppm": {
+    "t1_l1l2": 526.0,
+    "t2_l2l3": 633.0,
+    "t3_l3l4": 748.0
+  },
+  "baseline_ppm": {
+    "latest": 469.5,
+    "median": 470.2
+  },
+  "offsets_ppm": {
+    "403": -67.0,
+    "301": -53.0,
+    "401": -48.0,
+    "3F EH": -32.0,
+    "4F EH": -31.0,
+    "1F EH": -23.0,
+    "B1F EH": 0.0
+  }
+}

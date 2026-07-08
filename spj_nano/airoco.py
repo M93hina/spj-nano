@@ -3,10 +3,12 @@
 import csv
 import io
 import os
+import time
 
 import requests
 
 BASE_URL = "https://airoco.necolico.jp"
+DAY_SECONDS = 86400
 
 
 def _credentials():
@@ -30,7 +32,11 @@ def fetch_day_csv(start_date: int) -> list[dict]:
     hash_id, subscription_key = _credentials()
     resp = requests.get(
         f"{BASE_URL}/data-api/day-csv",
-        params={"id": hash_id, "subscription-key": subscription_key, "startDate": start_date},
+        params={
+            "id": hash_id,
+            "subscription-key": subscription_key,
+            "startDate": start_date,
+        },
         timeout=30,
     )
     resp.raise_for_status()
@@ -50,3 +56,16 @@ def fetch_day_csv(start_date: int) -> list[dict]:
             }
         )
     return readings
+
+
+def fetch_range(start_ts: int, end_ts: int) -> list[dict]:
+    """start_ts〜end_ts(UNIX秒)の区間を24時間単位でfetch_day_csvして結合する。
+    各取得の間に0.3秒スリップする。戻り値はlatest APIと同じキー形式。"""
+    all_readings: list[dict] = []
+    cursor = start_ts
+    while cursor < end_ts:
+        all_readings.extend(fetch_day_csv(cursor))
+        cursor += DAY_SECONDS
+        if cursor < end_ts:
+            time.sleep(0.3)
+    return all_readings

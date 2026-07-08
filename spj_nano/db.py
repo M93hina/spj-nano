@@ -42,7 +42,16 @@ SENSOR_LABELS = {
 }
 
 
-def get_readings(conn: sqlite3.Connection, sensor_name: str, since_ts: int | None = None) -> pd.DataFrame:
+def get_latest_timestamp(conn: sqlite3.Connection) -> int | None:
+    """全センサー中の最新タイムスタンプ(UNIX秒)を返す。データ無しはNone。"""
+    cur = conn.execute("SELECT MAX(timestamp) FROM sensor_readings")
+    row = cur.fetchone()
+    return row[0] if row and row[0] is not None else None
+
+
+def get_readings(
+    conn: sqlite3.Connection, sensor_name: str, since_ts: int | None = None
+) -> pd.DataFrame:
     """指定センサーの時系列データをDataFrameで取得する(timestamp昇順)"""
     query = "SELECT timestamp, co2, temperature, relative_humidity FROM sensor_readings WHERE sensor_name = ?"
     params: list = [sensor_name]
@@ -51,14 +60,25 @@ def get_readings(conn: sqlite3.Connection, sensor_name: str, since_ts: int | Non
         params.append(since_ts)
     query += " ORDER BY timestamp"
     df = pd.read_sql_query(query, conn, params=params)
-    df["datetime"] = pd.to_datetime(df["timestamp"], unit="s", utc=True).dt.tz_convert("Asia/Tokyo").dt.tz_localize(None)
+    df["datetime"] = (
+        pd.to_datetime(df["timestamp"], unit="s", utc=True)
+        .dt.tz_convert("Asia/Tokyo")
+        .dt.tz_localize(None)
+    )
     return df
 
 
 def save_readings(conn: sqlite3.Connection, readings: list[dict]) -> int:
     """センサーデータを保存する。CO2値が無いレコードは除外する。戻り値は新規保存件数。"""
     rows = [
-        (r["sensorNumber"], r["sensorName"], r["co2"], r["temperature"], r["relativeHumidity"], r["timestamp"])
+        (
+            r["sensorNumber"],
+            r["sensorName"],
+            r["co2"],
+            r["temperature"],
+            r["relativeHumidity"],
+            r["timestamp"],
+        )
         for r in readings
         if r.get("co2") is not None
     ]
