@@ -1,0 +1,15 @@
+<!doctype html>
+<title>mobile viewport test</title>
+<style>
+  body { margin: 0; display: flex; gap: 16px; padding: 12px; background: #ddd; font-family: sans-serif; }
+  .frame { border: 2px solid #333; }
+  .label { font-size: 12px; margin: 0 0 4px; }
+</style>
+<div>
+  <p class="label">390 x 780 (スマホ)</p>
+  <iframe class="frame" src="http://localhost:8010/" width="390" height="780"></iframe>
+</div>
+<div>
+  <p class="label">600 x 780 (小型タブレット)</p>
+  <iframe class="frame" src="http://localhost:8010/" width="600" height="780"></iframe>
+</div>

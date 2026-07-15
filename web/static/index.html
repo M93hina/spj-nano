@@ -1,0 +1,608 @@
+<!doctype html>
+<title>B1F フリースペース 混雑状況</title>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  .viz-root {
+    color-scheme: light;
+    --surface-1: #fcfcfb;
+    --page-plane: #f9f9f7;
+    --text-primary: #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted: #898781;
+    --gridline: #e1e0d9;
+    --baseline: #c3c2b7;
+    --border: rgba(11, 11, 11, 0.1);
+    --series-co2: #2a78d6;
+    --seq-100: #cde2fb;
+    --seq-700: #0d366b;
+    --status-good: #0ca30c;
+    --status-warning: #fab219;
+    --status-serious: #ec835a;
+    --status-critical: #d03b3b;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) .viz-root {
+      color-scheme: dark;
+      --surface-1: #1a1a19;
+      --page-plane: #0d0d0d;
+      --text-primary: #ffffff;
+      --text-secondary: #c3c2b7;
+      --text-muted: #898781;
+      --gridline: #2c2c2a;
+      --baseline: #383835;
+      --border: rgba(255, 255, 255, 0.1);
+      --series-co2: #3987e5;
+    }
+  }
+  :root[data-theme="dark"] .viz-root {
+    color-scheme: dark;
+    --surface-1: #1a1a19;
+    --page-plane: #0d0d0d;
+    --text-primary: #ffffff;
+    --text-secondary: #c3c2b7;
+    --text-muted: #898781;
+    --gridline: #2c2c2a;
+    --baseline: #383835;
+    --border: rgba(255, 255, 255, 0.1);
+    --series-co2: #3987e5;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+  body {
+    margin: 0;
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    background: var(--page-plane);
+    color: var(--text-primary);
+  }
+  .wrap {
+    max-width: 980px;
+    margin: 0 auto;
+    padding: 24px 16px 64px;
+  }
+  h1 {
+    font-size: 1.4rem;
+    font-weight: 600;
+    margin: 0 0 4px;
+  }
+  .subtitle {
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    margin: 0 0 20px;
+  }
+  .card {
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px 18px;
+    margin-bottom: 16px;
+  }
+  .metrics {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+  .metric {
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 16px;
+  }
+  .metric .label {
+    color: var(--text-secondary);
+    font-size: 0.78rem;
+    margin-bottom: 6px;
+  }
+  .metric .value {
+    font-size: 1.6rem;
+    font-weight: 600;
+    font-variant-numeric: proportional-nums;
+  }
+  .metric .value.value-small {
+    font-size: 1.15rem;
+  }
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #fff;
+  }
+  .warning-banner {
+    display: none;
+    align-items: flex-start;
+    gap: 10px;
+    background: color-mix(in srgb, var(--status-warning) 16%, var(--surface-1));
+    border: 1px solid color-mix(in srgb, var(--status-warning) 45%, var(--border));
+    border-radius: 12px;
+    padding: 12px 16px;
+    margin-bottom: 16px;
+    font-size: 0.88rem;
+    color: var(--text-primary);
+  }
+  .warning-banner.show {
+    display: flex;
+  }
+  .warning-banner .icon {
+    font-size: 1.2rem;
+    line-height: 1;
+  }
+  h2 {
+    font-size: 1.05rem;
+    font-weight: 600;
+    margin: 0 0 10px;
+  }
+  .thresholds-desc {
+    font-size: 0.9rem;
+    line-height: 1.7;
+  }
+  .thresholds-desc .caption {
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    margin-top: 4px;
+  }
+  .level-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 1px 8px;
+    border-radius: 999px;
+    font-weight: 600;
+    color: #fff;
+    font-size: 0.85rem;
+  }
+  canvas {
+    max-width: 100%;
+  }
+  /* Chart.jsはmaintainAspectRatio:falseでラッパーの高さに従う */
+  .chart-wrap {
+    position: relative;
+    height: 320px;
+  }
+  .chart-note {
+    color: var(--text-muted);
+    font-size: 0.78rem;
+    margin-top: 8px;
+  }
+  .heatmap-outer {
+    position: relative;
+  }
+  .heatmap-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .heatmap-hint {
+    display: none;
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    margin-top: 6px;
+  }
+  table.heatmap {
+    border-collapse: collapse;
+    font-size: 0.72rem;
+    width: 100%;
+    min-width: 640px;
+  }
+  table.heatmap th,
+  table.heatmap td {
+    text-align: center;
+    padding: 4px 3px;
+    font-variant-numeric: tabular-nums;
+  }
+  table.heatmap th {
+    color: var(--text-secondary);
+    font-weight: 500;
+    font-size: 0.68rem;
+  }
+  /* 曜日ラベル列は横スクロール中も見えるように固定する */
+  table.heatmap th.corner,
+  table.heatmap td.wd-label {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    background: var(--surface-1);
+  }
+  table.heatmap td.wd-label {
+    color: var(--text-secondary);
+    font-weight: 600;
+    text-align: right;
+    padding-right: 8px;
+  }
+  table.heatmap td.cell {
+    border-radius: 3px;
+    border: 1px solid var(--surface-1);
+  }
+  table.heatmap td.cell.empty {
+    background: var(--gridline);
+    color: var(--text-muted);
+  }
+  .empty-state {
+    text-align: center;
+    padding: 48px 16px;
+    color: var(--text-secondary);
+  }
+  .hidden {
+    display: none;
+  }
+  footer.updated-at {
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    text-align: right;
+    margin-top: 8px;
+  }
+
+  /* --- モバイル(タブレット以下): ヒートマップのスクロールヒント --- */
+  @media (max-width: 700px) {
+    /* 右端フェードで「まだ続きがある」ことを示す(スクロール領域の外に重ねる) */
+    .heatmap-outer::after {
+      content: "";
+      position: absolute;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      width: 28px;
+      background: linear-gradient(to left, var(--surface-1), transparent);
+      pointer-events: none;
+    }
+    .heatmap-hint {
+      display: block;
+    }
+  }
+
+  /* --- モバイル(スマートフォン幅) --- */
+  @media (max-width: 480px) {
+    .wrap {
+      padding: 16px 10px 48px;
+    }
+    .card {
+      padding: 12px 12px;
+      border-radius: 10px;
+    }
+    h1 {
+      font-size: 1.2rem;
+    }
+    /* メトリクスは1列縦積みではなく2×2グリッドにする */
+    .metrics {
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .metric {
+      padding: 10px 12px;
+    }
+    .metric .value {
+      font-size: 1.25rem;
+    }
+    .metric .value.value-small {
+      font-size: 0.95rem;
+    }
+    .badge {
+      font-size: 0.82rem;
+      padding: 3px 8px;
+    }
+    .chart-wrap {
+      height: 240px;
+    }
+    .thresholds-desc {
+      font-size: 0.82rem;
+    }
+  }
+</style>
+
+<div class="viz-root wrap">
+  <h1>B1F フリースペース 混雑状況</h1>
+  <p class="subtitle">5分ごとに自動更新されます。実測データに基づく現在の混雑状況を表示しています。</p>
+
+  <div id="empty-state" class="card empty-state hidden">
+    データがありません。収集プロセス(scripts/server.py)が動作しているか、
+    先に scripts/backfill.py で初期データを投入済みか確認してください。
+  </div>
+
+  <div id="dashboard-body" class="hidden">
+    <div id="warning-banner" class="warning-banner">
+      <span class="icon">⚠</span>
+      <span id="warning-text"></span>
+    </div>
+
+    <div class="metrics">
+      <div class="metric">
+        <div class="label">現在のCO2濃度</div>
+        <div class="value" id="metric-co2">–</div>
+      </div>
+      <div class="metric">
+        <div class="label">混雑度</div>
+        <div class="value"><span class="badge" id="metric-level">–</span></div>
+      </div>
+      <div class="metric">
+        <div class="label">最終更新</div>
+        <div class="value value-small" id="metric-updated">–</div>
+      </div>
+      <div class="metric">
+        <div class="label">前処理で除去したスパイク</div>
+        <div class="value" id="metric-spikes">–</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>閾値（平日日中のCO2分布から自動算出）</h2>
+      <div class="thresholds-desc" id="thresholds-desc"></div>
+      <div class="caption" id="thresholds-caption"></div>
+    </div>
+
+    <div class="card">
+      <h2>直近24時間のCO2推移</h2>
+      <div class="chart-wrap">
+        <canvas id="chart-24h"></canvas>
+      </div>
+      <div class="chart-note">
+        青線は実測CO2（前処理済み）、グレーの点線はL1/L2・L2/L3・L3/L4の混雑レベル閾値を表します。
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>曜日 × 時間帯の平均CO2濃度（前処理済みデータ全体）</h2>
+      <div class="heatmap-outer">
+        <div class="heatmap-scroll">
+          <table class="heatmap" id="heatmap-table"></table>
+        </div>
+      </div>
+      <div class="heatmap-hint">→ 表は横にスクロールできます</div>
+    </div>
+
+    <footer class="updated-at" id="fetched-at"></footer>
+  </div>
+</div>
+
+<script src="/static/chart.umd.js"></script>
+<script>
+  const REFRESH_MS = 5 * 60 * 1000;
+
+  const STATUS_COLORS = {
+    1: "#0ca30c", // good - 空いています
+    2: "#fab219", // warning - やや利用あり
+    3: "#ec835a", // serious - 混雑
+    4: "#d03b3b", // critical - 非常に混雑
+  };
+
+  const root = document.querySelector(".viz-root");
+  function cssVar(name) {
+    return getComputedStyle(root).getPropertyValue(name).trim();
+  }
+
+  let chart = null;
+
+  function hexToRgb(hex) {
+    const h = hex.replace("#", "");
+    return [
+      parseInt(h.substring(0, 2), 16),
+      parseInt(h.substring(2, 4), 16),
+      parseInt(h.substring(4, 6), 16),
+    ];
+  }
+
+  function lerpColorHex(hexA, hexB, t) {
+    const a = hexToRgb(hexA);
+    const b = hexToRgb(hexB);
+    const c = a.map((v, i) => Math.round(v + (b[i] - v) * t));
+    return `#${c.map((v) => v.toString(16).padStart(2, "0")).join("")}`;
+  }
+
+  function relativeLuminance([r, g, b]) {
+    const srgb = [r, g, b].map((v) => {
+      const c = v / 255;
+      return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+    });
+    return 0.2126 * srgb[0] + 0.7152 * srgb[1] + 0.0722 * srgb[2];
+  }
+
+  function renderEmpty() {
+    document.getElementById("empty-state").classList.remove("hidden");
+    document.getElementById("dashboard-body").classList.add("hidden");
+  }
+
+  function renderDashboard(data) {
+    document.getElementById("empty-state").classList.add("hidden");
+    document.getElementById("dashboard-body").classList.remove("hidden");
+
+    const cur = data.current;
+    document.getElementById("metric-co2").textContent = `${cur.co2.toFixed(0)} ppm`;
+    const levelBadge = document.getElementById("metric-level");
+    levelBadge.textContent = `${cur.icon} ${cur.level_label}（L${cur.level}）`;
+    levelBadge.style.background = STATUS_COLORS[cur.level] || cssVar("--text-muted");
+    document.getElementById("metric-updated").textContent = cur.last_update;
+    document.getElementById("metric-spikes").textContent = `${cur.spikes_removed} 点`;
+
+    const banner = document.getElementById("warning-banner");
+    if (data.staleness.is_stale) {
+      const ageHours = data.staleness.age_hours;
+      const ageStr =
+        ageHours >= 24 ? `約${(ageHours / 24).toFixed(1)}日` : `約${ageHours.toFixed(1)}時間`;
+      document.getElementById("warning-text").textContent =
+        `データが${ageStr}前（${data.staleness.last_update}時点）を最後に更新が止まっています。` +
+        "以下の表示はすべて最終データ時点を起点にした情報であり、リアルタイムの状況ではない点にご注意ください。";
+      banner.classList.add("show");
+    } else {
+      banner.classList.remove("show");
+    }
+
+    const th = data.thresholds;
+    document.getElementById("thresholds-desc").textContent =
+      `L1 〜${th.t1.toFixed(0)}ppm「空いています」 / ` +
+      `L2 ${th.t1.toFixed(0)}〜${th.t2.toFixed(0)}「やや利用あり」 / ` +
+      `L3 ${th.t2.toFixed(0)}〜${th.t3.toFixed(0)}「混雑」 / ` +
+      `L4 ${th.t3.toFixed(0)}〜「非常に混雑」`;
+    document.getElementById("thresholds-caption").textContent =
+      `平日日中サンプル数 ${th.weekday_daytime_samples}、分布 median=${
+        th.median !== null ? th.median.toFixed(0) : "–"
+      }ppm`;
+
+    renderChart(data.series_24h, th);
+    renderHeatmap(data.heatmap, th);
+
+    document.getElementById("fetched-at").textContent =
+      `最終取得: ${new Date().toLocaleString("ja-JP")}`;
+  }
+
+  function renderChart(series, thresholds) {
+    const ctx = document.getElementById("chart-24h").getContext("2d");
+    const n = series.timestamps.length;
+    const flat = (v) => new Array(n).fill(v);
+
+    const seriesColor = cssVar("--series-co2");
+    const muted = cssVar("--text-muted");
+    const grid = cssVar("--gridline");
+    const textSecondary = cssVar("--text-secondary");
+
+    const datasets = [
+      {
+        label: "CO2（実測・前処理済み）",
+        data: series.co2,
+        borderColor: seriesColor,
+        backgroundColor: seriesColor,
+        borderWidth: 2,
+        pointRadius: 0,
+        tension: 0.15,
+        order: 1,
+      },
+      {
+        label: `L1/L2 (${thresholds.t1.toFixed(0)}ppm)`,
+        data: flat(thresholds.t1),
+        borderColor: muted,
+        borderWidth: 1,
+        borderDash: [4, 3],
+        pointRadius: 0,
+        order: 2,
+      },
+      {
+        label: `L2/L3 (${thresholds.t2.toFixed(0)}ppm)`,
+        data: flat(thresholds.t2),
+        borderColor: muted,
+        borderWidth: 1,
+        borderDash: [4, 3],
+        pointRadius: 0,
+        order: 2,
+      },
+      {
+        label: `L3/L4 (${thresholds.t3.toFixed(0)}ppm)`,
+        data: flat(thresholds.t3),
+        borderColor: muted,
+        borderWidth: 1,
+        borderDash: [4, 3],
+        pointRadius: 0,
+        order: 2,
+      },
+    ];
+
+    if (chart) {
+      chart.data.labels = series.timestamps;
+      chart.data.datasets = datasets;
+      chart.update();
+      return;
+    }
+
+    chart = new Chart(ctx, {
+      type: "line",
+      data: { labels: series.timestamps, datasets },
+      options: {
+        responsive: true,
+        // ラッパー(.chart-wrap)の高さに従わせる。アスペクト比固定だと
+        // モバイル幅(360px前後)でチャートが極端に低く潰れるため。
+        maintainAspectRatio: false,
+        interaction: { mode: "index", intersect: false },
+        plugins: {
+          // 系列は実測CO2の1本のみ(閾値線はキャプションで説明)なので凡例は出さない。
+          // 凡例に閾値3本が並ぶとモバイルで数行を占有してしまう。
+          legend: { display: false },
+          tooltip: {
+            mode: "index",
+            intersect: false,
+            // 閾値データセット(フラット線)はツールチップから除外
+            filter: (item) => item.datasetIndex === 0,
+          },
+        },
+        scales: {
+          x: {
+            ticks: { color: muted, maxTicksLimit: 8, font: { size: 10 } },
+            grid: { color: grid },
+          },
+          y: {
+            title: { display: true, text: "CO2 [ppm]", color: textSecondary },
+            ticks: { color: muted },
+            grid: { color: grid },
+          },
+        },
+      },
+    });
+  }
+
+  function renderHeatmap(heatmap, thresholds) {
+    const table = document.getElementById("heatmap-table");
+    table.innerHTML = "";
+
+    const seqLow = "--seq-100";
+    const seqHigh = "--seq-700";
+    const lowHex = cssVar(seqLow);
+    const highHex = cssVar(seqHigh);
+    const lo = thresholds.t1;
+    const hi = thresholds.t3;
+
+    const thead = document.createElement("tr");
+    const corner = document.createElement("th");
+    corner.className = "corner";
+    thead.appendChild(corner);
+    heatmap.hours.forEach((h) => {
+      const th = document.createElement("th");
+      th.textContent = h;
+      thead.appendChild(th);
+    });
+    table.appendChild(thead);
+
+    heatmap.weekdays.forEach((wd, ri) => {
+      const tr = document.createElement("tr");
+      const wdCell = document.createElement("td");
+      wdCell.textContent = wd;
+      wdCell.className = "wd-label";
+      tr.appendChild(wdCell);
+
+      heatmap.values[ri].forEach((v) => {
+        const td = document.createElement("td");
+        td.className = "cell";
+        if (v === null || v === undefined) {
+          td.classList.add("empty");
+          td.textContent = "";
+        } else {
+          const t = Math.max(0, Math.min(1, (v - lo) / (hi - lo || 1)));
+          const bg = lerpColorHex(lowHex, highHex, t);
+          td.style.background = bg;
+          const lum = relativeLuminance(hexToRgb(bg));
+          td.style.color = lum > 0.45 ? "#0b0b0b" : "#ffffff";
+          td.textContent = Math.round(v);
+        }
+        tr.appendChild(td);
+      });
+      table.appendChild(tr);
+    });
+  }
+
+  async function fetchAndRender() {
+    try {
+      const res = await fetch("/api/dashboard");
+      const data = await res.json();
+      if (data.empty) {
+        renderEmpty();
+      } else {
+        renderDashboard(data);
+      }
+    } catch (e) {
+      console.error("ダッシュボード取得に失敗しました", e);
+    }
+  }
+
+  fetchAndRender();
+  setInterval(fetchAndRender, REFRESH_MS);
+</script>

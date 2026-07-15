@@ -1,0 +1,25 @@
+# B1F 混雑状況ダッシュボード(FastAPI版)の実行構成。
+# api: Webダッシュボード(FastAPI + 静的HTML/JS)を配信
+# collector: Airocoからのセンサーデータ収集常駐プロセス(scripts/server.py、変更禁止のまま利用)
+#
+# 起動: docker compose up -d --build
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - TZ=Asia/Tokyo
+    restart: unless-stopped
+
+  collector:
+    build: .
+    command: python scripts/server.py --interval 600
+    env_file: .env
+    volumes:
+      - ./data:/app/data
+    environment:
+      - TZ=Asia/Tokyo
+    restart: unless-stopped
