@@ -5,12 +5,13 @@
 """
 
 import datetime
+from pathlib import Path
 
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from spj_nano import db, forecast as fc, levels, preprocess as pp
+from spj_nano import db, features, forecast as fc, levels, lgbm_forecast, preprocess as pp
 
 st.set_page_config(page_title="B1F 混雑状況", layout="wide")
 
@@ -37,6 +38,21 @@ def compute_model(cleaned: pd.Series):
     return thresholds, profile, horizon_df
 
 
+@st.cache_data(ttl=300)
+def load_lgbm_prediction():
+    root = Path(__file__).resolve().parent
+    model_dir = root / "models" / "lgbm"
+    calendar_path = root / "data" / "calendar_tenpaku.csv"
+    if not (model_dir / "metadata.json").exists() or not calendar_path.exists():
+        return None
+    result, _ = lgbm_forecast.forecast_from_database(
+        db.DEFAULT_DB_PATH, calendar_path, model_dir
+    )
+    result["horizon_hours"] = result["horizon_minutes"] / 60.0
+    result["time"] = pd.to_datetime(result["time"])
+    return result
+
+
 cleaned, n_spike = load_data()
 
 st.title("B1F フリースペース 混雑状況・予測")
@@ -48,6 +64,12 @@ if cleaned.empty:
     st.stop()
 
 thresholds, profile, horizon_df = compute_model(cleaned)
+lgbm_df = load_lgbm_prediction()
+if lgbm_df is not None:
+    horizon_df = lgbm_df[horizon_df.columns]
+    prediction_label = "LightGBM + 天白キャンパスカレンダー"
+else:
+    prediction_label = "ベースライン+当日残差ハイブリッド"
 
 latest_time = cleaned.index[-1]
 latest_co2 = float(cleaned.iloc[-1])
@@ -167,7 +189,7 @@ fig.update_layout(yaxis_title="CO2 [ppm]", xaxis_title="時刻", height=420)
 st.plotly_chart(fig, width="stretch")
 
 # --- 予測サマリ表 ---
-st.caption("予測サマリ（ベースライン+当日残差ハイブリッド）")
+st.caption(f"予測サマリ（{prediction_label}）")
 summary = horizon_df.copy()
 summary["予測レベル"] = [thresholds.level(v)[1] for v in summary["predicted_co2"]]
 summary["時刻"] = summary["time"].dt.strftime("%H:%M")
