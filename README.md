@@ -2,6 +2,16 @@
 
 名城大学天白キャンパスのCO2濃度を使った混雑度・将来予測の試作システムです。
 
+## データ収集
+
+```powershell
+uv run python scripts/server.py
+```
+
+Airoco APIを10分間隔(`--interval`秒で変更可)でポーリングし、`data/sensor_data.db`に保存し続ける常駐プロセスです。起動時にDB最新時刻から現在までの欠損を自動補完します(最大30日分。`--no-backfill`でスキップ可)。データ収集はこの収集サーバー方式に統一しています(cron想定の単発実行スクリプト`scripts/collect.py`は廃止)。Docker運用時は`compose.yml`の`collector`サービスが同じコマンドを常駐実行します。
+
+初期データや30日を超える過去データの一括投入には`scripts/backfill.py`を使います。
+
 ## データ確認
 
 ```powershell

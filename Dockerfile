@@ -15,11 +15,14 @@ COPY pyproject.toml uv.lock ./
 # webエクストラを本番導入(依存レイヤーをアプリコードより先にキャッシュする)
 RUN uv sync --frozen --extra web --no-dev
 
-# 予測機能(forecast.py)を含む本体一式をコピー
-# (アプリ全体はそのままだが、web側では forecast.py を一切importしない)
+# 本体一式をコピー
+# (web側はLightGBM学習済みモデル(models/lgbm)を推論する lgbm_forecast.py のみ使用し、
+#  学習用スクリプトやStreamlit専用の forecast.py には依存しない)
 COPY spj_nano ./spj_nano
 COPY scripts ./scripts
 COPY web ./web
+COPY models ./models
+COPY data/calendar_tenpaku.csv ./data/calendar_tenpaku.csv
 
 ENV PATH="/app/.venv/bin:${PATH}"
 

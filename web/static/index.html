@@ -339,7 +339,7 @@
       <div class="chart-wrap">
         <canvas id="chart-24h"></canvas>
       </div>
-      <div class="chart-note">
+      <div class="chart-note" id="chart-note">
         青線は実測CO2（前処理済み）、グレーの点線はL1/L2・L2/L3・L3/L4の混雑レベル閾値を表します。
       </div>
     </div>
@@ -441,14 +441,16 @@
         th.median !== null ? th.median.toFixed(0) : "–"
       }ppm`;
 
-    renderChart(data.series_24h, th);
+    // データ更新が止まっている(stale)場合、最終データ時点起点の「15〜180分後予測」は
+    // 現在時刻に対する予測として意味を持たないため表示しない。
+    renderChart(data.series_24h, th, data.staleness.is_stale ? null : data.forecast);
     renderHeatmap(data.heatmap, th);
 
     document.getElementById("fetched-at").textContent =
       `最終取得: ${new Date().toLocaleString("ja-JP")}`;
   }
 
-  function renderChart(series, thresholds) {
+  function renderChart(series, thresholds, forecast) {
     const ctx = document.getElementById("chart-24h").getContext("2d");
     const n = series.timestamps.length;
     const flat = (v) => new Array(n).fill(v);
@@ -457,6 +459,19 @@
     const muted = cssVar("--text-muted");
     const grid = cssVar("--gridline");
     const textSecondary = cssVar("--text-secondary");
+
+    // 予測(forecast)があれば実測の右側(未来方向)にラベル・データ点を追加する。
+    // 無い場合は従来通り実測のみのラベルで描画する。
+    const hasForecast = Array.isArray(forecast) && forecast.length > 0;
+    const forecastLabels = hasForecast
+      ? forecast.map((f) => f.time.slice(5)) // "YYYY-MM-DD HH:MM" -> "MM-DD HH:MM"
+      : [];
+    const labels = series.timestamps.concat(forecastLabels);
+
+    document.getElementById("chart-note").textContent = hasForecast
+      ? "青線は実測CO2（前処理済み）、グレーの点線はL1/L2・L2/L3・L3/L4の混雑レベル閾値を表します。" +
+        "右端の青い破線は15〜180分後までのLightGBMによる予測です。"
+      : "青線は実測CO2（前処理済み）、グレーの点線はL1/L2・L2/L3・L3/L4の混雑レベル閾値を表します。";
 
     const datasets = [
       {
@@ -498,8 +513,29 @@
       },
     ];
 
+    if (hasForecast) {
+      // 実測部分はnullで埋め、実測最終点(境界)だけ値を入れて実線と破線をつなげる。
+      const forecastData = new Array(labels.length).fill(null);
+      forecastData[n - 1] = series.co2[n - 1];
+      forecast.forEach((f, i) => {
+        forecastData[n + i] = f.predicted_co2;
+      });
+      datasets.push({
+        label: "予測（LightGBM）",
+        data: forecastData,
+        borderColor: seriesColor,
+        backgroundColor: seriesColor,
+        borderWidth: 2,
+        borderDash: [6, 4],
+        pointRadius: (ctx) => (ctx.dataIndex >= n ? 3 : 0),
+        spanGaps: true,
+        tension: 0,
+        order: 1,
+      });
+    }
+
     if (chart) {
-      chart.data.labels = series.timestamps;
+      chart.data.labels = labels;
       chart.data.datasets = datasets;
       chart.update();
       return;
@@ -507,7 +543,7 @@
 
     chart = new Chart(ctx, {
       type: "line",
-      data: { labels: series.timestamps, datasets },
+      data: { labels, datasets },
       options: {
         responsive: true,
         // ラッパー(.chart-wrap)の高さに従わせる。アスペクト比固定だと
@@ -515,14 +551,14 @@
         maintainAspectRatio: false,
         interaction: { mode: "index", intersect: false },
         plugins: {
-          // 系列は実測CO2の1本のみ(閾値線はキャプションで説明)なので凡例は出さない。
+          // 系列は実測CO2・予測(あれば)のみ(閾値線はキャプションで説明)なので凡例は出さない。
           // 凡例に閾値3本が並ぶとモバイルで数行を占有してしまう。
           legend: { display: false },
           tooltip: {
             mode: "index",
             intersect: false,
             // 閾値データセット(フラット線)はツールチップから除外
-            filter: (item) => item.datasetIndex === 0,
+            filter: (item) => item.datasetIndex === 0 || item.datasetIndex === 4,
           },
         },
         scales: {

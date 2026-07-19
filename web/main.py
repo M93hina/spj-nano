@@ -1,14 +1,16 @@
 """B1F フリースペース 混雑状況ダッシュボード FastAPI版バックエンド
 
 Jetson Nano(Ubuntu 18.04, aarch64)でも軽量に動作させるため、Streamlit版(app.py)の
-うち予測機能を除いた表示内容のみをJSON APIとして提供する。
+表示内容をJSON APIとして提供する。
 
-予測機能(spj_nano/forecast.py)は別途作り直し中のため、本モジュールでは一切
-importしない・使用しない。
+予測機能はLightGBM(spj_nano/lgbm_forecast.py)による事前学習済みモデルを推論するのみ
+(学習は行わない)。モデルファイルやカレンダーCSVが無い場合・推論が失敗した場合は
+予測データをnullにして実測表示のみ返す(graceful degradation)。
 """
 
 from __future__ import annotations
 
+import logging
 import threading
 import time
 from pathlib import Path
@@ -19,9 +21,11 @@ from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from spj_nano import db, levels, preprocess as pp
+from spj_nano import db, levels, lgbm_forecast, preprocess as pp
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
+MODEL_DIR = Path(__file__).resolve().parent.parent / "models" / "lgbm"
+CALENDAR_PATH = Path(__file__).resolve().parent.parent / "data" / "calendar_tenpaku.csv"
 
 CACHE_TTL_SECONDS = 300  # st.cache_data(ttl=300) 相当
 STALE_THRESHOLD = pd.Timedelta(minutes=30)
@@ -79,12 +83,42 @@ def _load_data() -> tuple[pd.Series, int]:
     return cleaned, int(is_spike.sum())
 
 
+def _build_forecast_payload() -> list[dict] | None:
+    """LightGBMモデル(spj_nano/lgbm_forecast.py)による予測をJSON用のリストにする。
+
+    モデルファイル・カレンダーCSVが存在しない場合や推論中に例外が発生した場合は
+    Noneを返す。呼び出し側はこれをそのまま実測データと切り離してnull扱いすれば良く、
+    ダッシュボード全体を壊さない(graceful degradation)。
+    """
+    if not (MODEL_DIR / "metadata.json").exists() or not CALENDAR_PATH.exists():
+        return None
+    try:
+        result, _ = lgbm_forecast.forecast_from_database(
+            db.DEFAULT_DB_PATH, CALENDAR_PATH, MODEL_DIR
+        )
+    except Exception:
+        # 予測失敗でダッシュボード全体を壊さないが、原因調査のためログには残す
+        logging.getLogger(__name__).exception("LightGBM予測に失敗したためforecastをnullで返します")
+        return None
+    return [
+        {
+            "horizon_minutes": int(row.horizon_minutes),
+            "time": row.time.strftime("%Y-%m-%d %H:%M"),
+            "predicted_co2": round(float(row.predicted_co2), 1),
+        }
+        for row in result.itertuples()
+    ]
+
+
 def _build_dashboard_payload() -> dict:
-    """app.pyの表示ロジック(予測部分を除く)相当をJSONペイロードとして構築する。
+    """app.pyの表示ロジック相当をJSONペイロードとして構築する。
 
     鮮度判定(staleness)はキャッシュで古くならないよう、ここでは計算せず
     ハンドラ側で毎リクエスト計算する。そのために latest_time を内部キー
     "_latest_time" として持たせる(レスポンス生成時に除去する)。
+
+    予測(forecast)もこの関数内でまとめて計算し、TTLキャッシュ(300秒)に
+    載せることでLightGBMモデルの推論をリクエスト毎に行わないようにする。
     """
     cleaned, n_spike = _load_data()
 
@@ -148,6 +182,8 @@ def _build_dashboard_payload() -> dict:
             "hours": list(range(24)),
             "values": heatmap_values,
         },
+        # LightGBMモデルが無い/推論失敗時はnull(フロントは予測なしとして扱う)
+        "forecast": _build_forecast_payload(),
     }
 
 

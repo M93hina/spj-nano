@@ -13,3 +13,9 @@ dependencies = [
     "pdfplumber>=0.11.0",
     "lightgbm>=4.0.0",
 ]
+
+[project.optional-dependencies]
+web = [
+    "fastapi>=0.139.0",
+    "uvicorn>=0.49.0",
+]

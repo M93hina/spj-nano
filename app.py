@@ -59,7 +59,7 @@ st.title("B1F フリースペース 混雑状況・予測")
 
 if cleaned.empty:
     st.warning(
-        "データがありません。先に scripts/collect.py または scripts/backfill.py を実行してください。"
+        "データがありません。先に scripts/server.py で収集を開始するか、scripts/backfill.py で過去データを投入してください。"
     )
     st.stop()
 
