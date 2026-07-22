@@ -4,6 +4,12 @@
 
 FROM python:3.12-slim
 
+# LightGBMの共有ライブラリがlibgomp(GNU OpenMP)に動的リンクされているが、
+# python:3.12-slimには含まれていないため明示的に導入する
+# (無いと import時に "libgomp.so.1: cannot open shared object file" で失敗する)
+RUN apt-get update && apt-get install -y --no-install-recommends libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+
 # uvバイナリを取り込む(マルチアーキ対応のマニフェストからそのアーキに応じたuvが選ばれる)
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
