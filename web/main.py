@@ -174,7 +174,8 @@ def _build_dashboard_payload() -> dict:
             "median": None if quants.empty else round(float(quants.median()), 1),
         },
         "series_24h": {
-            "timestamps": [t.strftime("%m-%d %H:%M") for t in df_24h.index],
+            # forecast["time"]と同じ "YYYY-MM-DD HH:MM" 形式(年なしだとパースに不安があるため)
+            "timestamps": [t.strftime("%Y-%m-%d %H:%M") for t in df_24h.index],
             "co2": [round(float(v), 1) for v in df_24h.to_numpy()],
         },
         "heatmap": {

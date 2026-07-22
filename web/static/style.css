@@ -1,0 +1,376 @@
+/* B1F フリースペース 混雑状況ダッシュボード スタイル */
+
+.viz-root {
+  color-scheme: light;
+  --surface-1: #fcfcfb;
+  --page-plane: #f9f9f7;
+  --text-primary: #0b0b0b;
+  --text-secondary: #52514e;
+  --text-muted: #898781;
+  --gridline: #e1e0d9;
+  --baseline: #c3c2b7;
+  --border: rgba(11, 11, 11, 0.1);
+  --series-co2: #2a78d6;
+  --seq-100: #cde2fb;
+  --seq-700: #0d366b;
+  --status-good: #0ca30c;
+  --status-warning: #fab219;
+  --status-serious: #ec835a;
+  --status-critical: #d03b3b;
+}
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) .viz-root {
+    color-scheme: dark;
+    --surface-1: #1a1a19;
+    --page-plane: #0d0d0d;
+    --text-primary: #ffffff;
+    --text-secondary: #c3c2b7;
+    --text-muted: #898781;
+    --gridline: #2c2c2a;
+    --baseline: #383835;
+    --border: rgba(255, 255, 255, 0.1);
+    --series-co2: #3987e5;
+  }
+}
+:root[data-theme="dark"] .viz-root {
+  color-scheme: dark;
+  --surface-1: #1a1a19;
+  --page-plane: #0d0d0d;
+  --text-primary: #ffffff;
+  --text-secondary: #c3c2b7;
+  --text-muted: #898781;
+  --gridline: #2c2c2a;
+  --baseline: #383835;
+  --border: rgba(255, 255, 255, 0.1);
+  --series-co2: #3987e5;
+}
+
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: var(--page-plane);
+  color: var(--text-primary);
+}
+.wrap {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 24px 16px 64px;
+}
+h1 {
+  font-size: 1.4rem;
+  font-weight: 600;
+  margin: 0 0 4px;
+}
+.subtitle {
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  margin: 0 0 20px;
+}
+.card {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px 18px;
+  margin-bottom: 16px;
+}
+h2 {
+  font-size: 1.05rem;
+  font-weight: 600;
+  margin: 0 0 10px;
+}
+
+/* --- 現在の状況(ヒーロー) --- */
+.hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+}
+.hero-main {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: #fff;
+}
+.hero-co2 {
+  font-size: 2.2rem;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.hero-co2 .unit {
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin-left: 4px;
+}
+.hero-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+}
+.forecast-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85rem;
+  color: var(--text-primary);
+}
+.forecast-chip .mini-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 0.8rem;
+  color: #fff;
+}
+.hidden {
+  display: none;
+}
+
+/* --- データ停止などの警告バナー --- */
+.warning-banner {
+  display: none;
+  align-items: flex-start;
+  gap: 10px;
+  background: color-mix(in srgb, var(--status-warning) 16%, var(--surface-1));
+  border: 1px solid color-mix(in srgb, var(--status-warning) 45%, var(--border));
+  border-radius: 12px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  font-size: 0.88rem;
+  color: var(--text-primary);
+}
+.warning-banner.show {
+  display: flex;
+}
+.warning-banner .icon {
+  font-size: 1.2rem;
+  line-height: 1;
+}
+
+/* --- チャート --- */
+.chart-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin-bottom: 10px;
+}
+.chart-header h2 {
+  margin: 0;
+}
+/* 表示範囲切替(セグメントコントロール風) */
+.range-toggle {
+  display: inline-flex;
+  flex-shrink: 0;
+  background: var(--page-plane);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 2px;
+  gap: 2px;
+}
+.range-toggle button {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 6px 14px;
+  min-height: 32px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+.range-toggle button.active {
+  background: var(--series-co2);
+  color: #fff;
+}
+canvas {
+  max-width: 100%;
+}
+/* Chart.jsはmaintainAspectRatio:falseでラッパーの高さに従う */
+.chart-wrap {
+  position: relative;
+  height: 320px;
+}
+.chart-note {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  margin-top: 8px;
+}
+
+/* --- ヒートマップ --- */
+.heatmap-outer {
+  position: relative;
+}
+.heatmap-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.heatmap-hint {
+  display: none;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  margin-top: 6px;
+}
+table.heatmap {
+  border-collapse: collapse;
+  font-size: 0.72rem;
+  width: 100%;
+  min-width: 640px;
+}
+table.heatmap th,
+table.heatmap td {
+  text-align: center;
+  padding: 4px 3px;
+  font-variant-numeric: tabular-nums;
+}
+table.heatmap th {
+  color: var(--text-secondary);
+  font-weight: 500;
+  font-size: 0.68rem;
+}
+/* 曜日ラベル列は横スクロール中も見えるように固定する */
+table.heatmap th.corner,
+table.heatmap td.wd-label {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--surface-1);
+}
+table.heatmap td.wd-label {
+  color: var(--text-secondary);
+  font-weight: 600;
+  text-align: right;
+  padding-right: 8px;
+}
+table.heatmap td.cell {
+  border-radius: 3px;
+  border: 1px solid var(--surface-1);
+}
+table.heatmap td.cell.empty {
+  background: var(--gridline);
+  color: var(--text-muted);
+}
+
+/* --- データについて(折りたたみ) --- */
+details.about summary {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+details.about[open] summary {
+  margin-bottom: 8px;
+}
+details.about ul {
+  margin: 0;
+  padding-left: 1.2em;
+  font-size: 0.85rem;
+  line-height: 1.8;
+  color: var(--text-secondary);
+}
+details.about .level-scale {
+  color: var(--text-primary);
+}
+
+.empty-state {
+  text-align: center;
+  padding: 48px 16px;
+  color: var(--text-secondary);
+}
+footer.updated-at {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  text-align: right;
+  margin-top: 8px;
+}
+
+/* --- モバイル(タブレット以下): ヒートマップのスクロールヒント --- */
+@media (max-width: 700px) {
+  /* 右端フェードで「まだ続きがある」ことを示す(スクロール領域の外に重ねる) */
+  .heatmap-outer::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 28px;
+    background: linear-gradient(to left, var(--surface-1), transparent);
+    pointer-events: none;
+  }
+  .heatmap-hint {
+    display: block;
+  }
+}
+
+/* --- モバイル(スマートフォン幅) --- */
+@media (max-width: 480px) {
+  .wrap {
+    padding: 16px 10px 48px;
+  }
+  .card {
+    padding: 12px 12px;
+    border-radius: 10px;
+  }
+  h1 {
+    font-size: 1.2rem;
+  }
+  .hero {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .hero-main {
+    justify-content: space-between;
+    gap: 10px;
+  }
+  .hero-co2 {
+    font-size: 1.8rem;
+  }
+  .badge {
+    font-size: 0.92rem;
+    padding: 5px 12px;
+  }
+  .hero-meta {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 4px 12px;
+  }
+  .chart-wrap {
+    height: 240px;
+  }
+  .chart-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .range-toggle {
+    align-self: flex-start;
+  }
+  .range-toggle button {
+    padding: 8px 16px;
+    min-height: 36px;
+  }
+}
